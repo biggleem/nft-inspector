@@ -4,7 +4,7 @@ from web3 import Web3
 import pandas as pd
 from PIL import Image
 
-image = Image.open('images/nft-inspector-logo.gif')
+image = Image.open('images/nft-inspector-logo.png')
 st.sidebar.image(image, caption='Inspect any OpenSea.io NFT collection.')
 st.sidebar.header("OpenSea API Endpoints")
 endpoint_choices = ['Assets', 'Events', 'Rarity']
