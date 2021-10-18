@@ -67,49 +67,60 @@ if endpoint == 'Events':
     st.subheader("Raw JSON Data")
     st.write(events)
 
+
+@st.cache
+def get_assets(owner, collection):
+    params = {'owner': owner}
+    params['collection'] = collection     
+    r = requests.get('https://api.opensea.io/api/v1/assets', params=params)
+    return r.json()['assets']
+    
 if endpoint == 'Assets':
     st.sidebar.header('Filters')
+
     owner = st.sidebar.text_input("Owner Address")
     collection = st.sidebar.text_input("Collection Slug")
-    params = {'owner': owner}
-    if collection:
-        params['collection'] = collection
 
-    r = requests.get('https://api.opensea.io/api/v1/assets', params=params)
+    assets = get_assets(owner, collection)
+    st.session_state["owner"] = owner
+    st.session_state["collection"] = collection
 
-    assets = r.json()['assets']
     for asset in assets:                
         render_asset(asset)
-
-    st.subheader("Raw JSON Data")
-    st.write(r.json())
+    if not len(assets):
+        st.subheader("No result.")
+    # st.subheader("Raw JSON Data")
+    # st.write(r.json())
 
 if endpoint == 'Rarity':
-    with open('assets.json') as f:
-        data = json.loads(f.read())
-        asset_rarities = []
+    # with open('assets.json') as f:
+    #     data = json.loads(f.read())
+    
+    asset_rarities = []
+    owner = st.session_state["owner"]
+    collection = st.session_state["collection"]
+    assets = get_assets(owner, collection)
+    for asset in assets:
+        asset_rarity = 1
 
-        for asset in data['assets']:
-            asset_rarity = 1
+        for trait in asset['traits']:
+            trait_rarity = trait['trait_count'] / 8888
+            asset_rarity *= trait_rarity
 
-            for trait in asset['traits']:
-                trait_rarity = trait['trait_count'] / 8888
-                asset_rarity *= trait_rarity
+        asset_rarities.append({
+            'token_id': asset['token_id'],
+            'name': f"{asset['collection']['name']} #{asset['token_id']}",
+            'description': asset['description'],
+            'rarity': asset_rarity,
+            'traits': asset['traits'],
+            'image_url': asset['image_url'],
+            'collection': asset['collection']
+        })
 
-            asset_rarities.append({
-                'token_id': asset['token_id'],
-                'name': f"Wanderers {asset['token_id']}",
-                'description': asset['description'],
-                'rarity': asset_rarity,
-                'traits': asset['traits'],
-                'image_url': asset['image_url'],
-                'collection': asset['collection']
-            })
+    assets_sorted = sorted(asset_rarities, key=lambda asset: asset['rarity']) 
 
-        assets_sorted = sorted(asset_rarities, key=lambda asset: asset['rarity']) 
-
-        for asset in assets_sorted[:20]:
-            render_asset(asset)
-            st.subheader(f"{len(asset['traits'])} Traits")
-            for trait in asset['traits']:
-                st.write(f"{trait['trait_type']} - {trait['value']} - {trait['trait_count']} have this")
+    for asset in assets_sorted[:20]:
+        render_asset(asset)
+        st.subheader(f"{len(asset['traits'])} Traits")
+        for trait in asset['traits']:
+            st.write(f"{trait['trait_type']} - {trait['value']} - {trait['trait_count']} have this")
