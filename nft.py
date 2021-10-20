@@ -5,6 +5,7 @@ from web3 import Web3
 import pandas as pd
 from PIL import Image
 import numpy as np
+import datetime
 
 if not st.session_state.get("owner"):st.session_state.owner = ""
 if not st.session_state.get("collection"):st.session_state.collection = ""
@@ -15,7 +16,7 @@ if not st.session_state.get('order_direction'):st.session_state.order_direction 
 
     
 
-image = Image.open('images/nft-inspector-logo.gif')
+image = Image.open('images/nft-inspector-logo.png')
 st.sidebar.image(image, caption='Inspect any OpenSea.io NFT collection.')
 st.sidebar.header("OpenSea API Endpoints")
 endpoint_choices = ['Assets', 'Events', 'Rarity']
@@ -57,9 +58,13 @@ def get_events(params):
 
 if endpoint == 'Events':
     collection = st.sidebar.text_input("Collection Slug",st.session_state.collection)
+    st.sidebar.caption('"The token ID of the ERC721 asset to optionally filter by."')
     asset_contract_address = st.sidebar.text_input("Contract Address")
+    st.sidebar.caption('"The NFT contract address for the assets for which to show events."')
     token_id = st.sidebar.text_input("Token ID")
+    st.sidebar.caption('"The token ID of the ERC721 asset."')
     event_type = st.sidebar.selectbox("Event Type", ['offer_entered', 'cancelled', 'bid_withdrawn', 'transfer', 'approve'])
+    st.sidebar.caption('"The event type to filter. offers for new auctions, successful for sales, cancelled, bid_entered, bid_withdrawn, transfer, or approve"')
     params = {}
     if collection:
         params['collection_slug'] = collection
@@ -86,12 +91,19 @@ if endpoint == 'Events':
             event_list.append([event['created_date'], bidder, float(bid_amount), event['asset']['collection']['name'], event['asset']['token_id']])
     if not len(event_list):
         st.subheader("No result.")
+    
     df = pd.DataFrame(event_list, columns=['time', 'bidder', 'bid_amount', 'collection', 'token_id'])
+    # df.time = df.time.apply(lambda x: datetime.datetime.strptime(x, "%Y-%m-%dT%H:%M:%S.%f"))
+    # df['time'] = pd.to_datetime('time')
+    df.time = pd.to_datetime(df.time)
+    df.time = df.time.dt.strftime('%Y-%m-%d %H:%M:%S:M%')
+    # df = df.groupby(df.time.map(lambda t: t.minute)).sum([['bid_amount']]).reset_index()
+    
 
     # df['time']= pd.to_datetime(df['time'],infer_datetime_format=True)
-    new = df[['bid_amount',"time"]].copy()
-    new = new.set_index("time")
-    st.line_chart(new)  
+    new = df[['bid_amount','time']].copy()
+    new = new.set_index('time')
+    st.line_chart(new)
 
     st.write(df)
 
@@ -128,10 +140,12 @@ if endpoint == 'Assets':
     st.sidebar.header('Filters')
     owner = st.sidebar.text_input("Owner Address",st.session_state.owner)
     st.session_state.owner= owner
-    collection = st.sidebar.text_input("Collection",st.session_state.collection)
+    st.sidebar.caption('**COPY AND PASTE THE WALLET ADDRESS HERE**, "Your wallet address will look similar to this.": 0xdc7635110f919dbdc0eaeb2da873134aaad0aa6')
+    collection = st.sidebar.text_input("Collection Slug",st.session_state.collection)
     if collection != st.session_state.collection:
         update("assets_page",1)
     st.session_state.collection = collection
+    st.sidebar.caption('**COPY AND PASTE THE COLLECTION SLUG HERE**, "The collection slug is located at the end of the web address on the main page of the collection.": https://opensea.io/collection/<"collection-slug">.')
 
     assets = get_assets(owner, collection, st.session_state.assets_page, st.session_state.order_by, st.session_state.order_direction)
     for asset in assets:                
