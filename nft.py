@@ -1,10 +1,8 @@
-from numpy import inexact, number
 import streamlit as st
-import requests, json, math
+import requests
 from web3 import Web3
 import pandas as pd
 from PIL import Image
-import numpy as np
 
 if not st.session_state.get("owner"):st.session_state.owner = ""
 if not st.session_state.get("collection"):st.session_state.collection = ""
@@ -47,9 +45,14 @@ def render_asset(asset):
         st.markdown(f"[![image]({asset['image_url']})]({asset['permalink']})")
 
 @st.cache
-def get_events(params):
+def get_events(collection, asset_contract_address, token_id, event_type):
     events = []
-    for page in range(15):
+    params = {}
+    if collection: params["collection_slug"] = collection
+    if asset_contract_address: params["asset_contract_address"] = asset_contract_address
+    if token_id: params["token_id"] = token_id
+    if event_type: params["event_type"] = event_type
+    for page in range(10):
         params['offset'] = page * 20
         r = requests.get('https://api.opensea.io/api/v1/events', params=params)
         events += r.json()['asset_events']
@@ -57,41 +60,35 @@ def get_events(params):
 
 if endpoint == 'Events':
     collection = st.sidebar.text_input("Collection Slug",st.session_state.collection)
+    st.session_state["collection"] = collection
     asset_contract_address = st.sidebar.text_input("Contract Address")
     token_id = st.sidebar.text_input("Token ID")
     event_type = st.sidebar.selectbox("Event Type", ['offer_entered', 'cancelled', 'bid_withdrawn', 'transfer', 'approve'])
-    params = {}
-    if collection:
-        params['collection_slug'] = collection
-        st.session_state["collection"] = collection
-    if asset_contract_address:
-        params['asset_contract_address'] = asset_contract_address
-    if token_id:
-        params['token_id'] = token_id
-    if event_type:
-        params['event_type'] = event_type
 
-    events = get_events(params)
+    events = get_events(collection, asset_contract_address, token_id, event_type)
 
     event_list = []
     for event in events:
         if event_type == 'offer_entered':
-            if event['bid_amount']:
-                bid_amount = Web3.fromWei(int(event['bid_amount']), 'ether')
-            if event['from_account']['user']:
-                bidder = event['from_account']['user']['username']
-            else:
-                bidder = event['from_account']['address']
+            if event.get("asset"):
+                if event['bid_amount']:
+                    bid_amount = Web3.fromWei(int(event['bid_amount']), 'ether')
+                if event['from_account']['user']:
+                    bidder = event['from_account']['user']['username']
+                else:
+                    bidder = event['from_account']['address']
 
-            event_list.append([event['created_date'], bidder, float(bid_amount), event['asset']['collection']['name'], event['asset']['token_id']])
+                event_list.append([event['created_date'], bidder, float(bid_amount), event["asset"]["collection"]["name"], event['asset']['token_id']])
+
     if not len(event_list):
         st.subheader("No result.")
     df = pd.DataFrame(event_list, columns=['time', 'bidder', 'bid_amount', 'collection', 'token_id'])
 
     df.time = pd.to_datetime(df.time)
-    selected_df = df.groupby([df.time.dt.strftime('%Y-%m-%d %H:%M:%S')]).sum()[["bid_amount"]].sort_values(by="bid_amount")
+    if len(df):
+        new_df = df.groupby([df.time.dt.strftime('%Y-%m-%d %H:%M:%S')]).sum()[["bid_amount"]].sort_values(by="bid_amount")
 
-    st.line_chart(selected_df)  
+        st.line_chart(new_df)  
     st.write(df)
 
 
@@ -112,7 +109,7 @@ def update(key,value):
     st.session_state[key] = value
     page_text.subheader(f'Page {st.session_state.assets_page}')
 
-order_by_list = ["token_id", "sale_date" , "sale_count", "sale_price"]
+order_by_list = ["pk", "sale_date" , "sale_count", "sale_price"]
 
 if endpoint == 'Assets':
     page,_,dir,by = st.columns([4,7,4,4])
