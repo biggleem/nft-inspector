@@ -35,14 +35,15 @@ def render_asset(asset):
     else:
         st.write(asset['collection']['description'])
 
-    if asset['image_url'].endswith('mp4') or asset['image_url'].endswith('mov'):
-        st.video(asset['image_url'])
-    elif asset['image_url'].endswith('svg'):
-        svg = requests.get(asset['image_url']).content.decode()
+    image_url = asset.get('image_url', '')
+    if image_url.endswith('mp4') or image_url.endswith('mov'):
+        st.video(image_url)
+    elif image_url.endswith('svg'):
+        svg = requests.get(image_url).content.decode()
         st.image(svg)
-    elif asset['image_url']:
-        # st.image(asset['image_url'])
-        st.markdown(f"[![image]({asset['image_url']})]({asset['permalink']})")
+    elif image_url:
+        # st.image(image_url)
+        st.markdown(f"[![image]({image_url})]({asset['permalink']})")
 
 @st.cache
 def get_events(collection, asset_contract_address, token_id, event_type):
@@ -71,14 +72,20 @@ if endpoint == 'Events':
     for event in events:
         if event_type == 'offer_entered':
             if event.get("asset"):
-                if event['bid_amount']:
-                    bid_amount = Web3.fromWei(int(event['bid_amount']), 'ether')
+                raw_amount = event.get('bid_amount') or 0
+                bid_amount = Web3.fromWei(int(raw_amount), 'ether') if raw_amount else 0
                 if event['from_account']['user']:
                     bidder = event['from_account']['user']['username']
                 else:
                     bidder = event['from_account']['address']
 
-                event_list.append([event['created_date'], bidder, float(bid_amount), event["asset"]["collection"]["name"], event['asset']['token_id']])
+                event_list.append([
+                    event['created_date'],
+                    bidder,
+                    float(bid_amount),
+                    event["asset"]["collection"]["name"],
+                    event['asset']['token_id']
+                ])
 
     if not len(event_list):
         st.subheader("No result.")
@@ -105,9 +112,10 @@ def get_assets(owner, collection, page, order_by, order_direction):
     r = requests.get('https://api.opensea.io/api/v1/assets', params=params)
     return r.json()['assets']
 
-def update(key,value):
+def update(key, value):
     st.session_state[key] = value
-    page_text.subheader(f'Page {st.session_state.assets_page}')
+    # reflect the new page number based on the updated key
+    page_text.subheader(f"Page {st.session_state[key]}")
 
 order_by_list = ["pk", "sale_date" , "sale_count", "sale_price"]
 
@@ -160,7 +168,7 @@ if endpoint == 'Rarity':
         st.session_state.order_by = order_by
 
     page_text = page.empty()
-    page_text.subheader(f'Page {st.session_state.assets_page}')
+    page_text.subheader(f'Page {st.session_state.rarity_page}')
 
     asset_rarities = []
     owner = st.session_state["owner"]
